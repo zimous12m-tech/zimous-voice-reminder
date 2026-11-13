@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Zimous Voice Reminder v2.1</title>
     
-    <!-- Meta Tags para partilha bonita (Evita aspeto de spam no WhatsApp/Redes Sociais) -->
-    <meta property="meta-title" content="Zimous Voice Reminder v2.1">
-    <meta property="og:title" content="Zimous Voice Reminder - Gestor de Lembretes por Voz">
-    <meta property="og:description" content="Organize as suas tarefas e notas de voz de forma simples e direta no telemóvel, sem instalar nada!">
-    <meta property="og:image" content="https://images.unsplash.com/photo-1584438784894-089d6a62b8fa?w=600&auto=format&fit=crop&q=60">
+    <!-- Meta Tags para partilha bonita com a imagem gerada -->
+    <meta property="og:title" content="Zimous Voice Reminder 🎙️ | O Seu Assistente de Voz Inteligente">
+    <meta property="og:description" content="Organize tarefas e grave notas de voz diretamente no telemóvel. Sem instalar nada, rápido e 100% privado!">
+    <meta property="og:image" content="https://raw.githubusercontent.com/zimous12m-tech/zimous-voice-reminder/main/preview.jpg">
+    <meta property="og:url" content="https://zimous12m-tech.github.io/zimous-voice-reminder/">
     <meta property="og:type" content="website">
 
     <!-- Tailwind CSS -->
@@ -29,10 +29,23 @@
                 </div>
             </div>
             <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                <span class="w-2 h-2 mr-1.5 bg-emerald-500 rounded-full animate-pulse"></span> Pronto a Usar
+                <span class="w-2 h-2 mr-1.5 bg-emerald-500 rounded-full animate-pulse"></span> Sistema Ativo
             </span>
         </div>
     </header>
+
+    <!-- Modal de Alarme Disparado -->
+    <div id="alarmModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-indigo-500/50 rounded-2xl max-w-md w-full p-6 shadow-2xl text-center space-y-4 animate-bounce">
+            <div class="text-4xl">🚨</div>
+            <h2 class="text-xl font-bold text-indigo-400">Alarme de Lembrete!</h2>
+            <p id="alarmTaskDesc" class="text-slate-200 text-sm font-medium"></p>
+            <div id="alarmAudioContainer"></div>
+            <button onclick="dismissAlarm()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2.5 rounded-xl transition cursor-pointer">
+                Compreendido / Fechar Alarme
+            </button>
+        </div>
+    </div>
 
     <!-- Main Content -->
     <main class="flex-grow max-w-4xl w-full mx-auto px-4 py-6 space-y-6">
@@ -104,13 +117,17 @@
         let audioChunks = [];
         let isRecording = false;
         let recordedAudioBase64 = "";
+        let activeAlarmAudio = null;
 
-        // Preencher data atual por defeito
+        // Preencher data atual por defeito e iniciar o vigilante de alarmes
         document.addEventListener("DOMContentLoaded", () => {
             const now = new Date();
             now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
             document.getElementById('taskTime').value = now.toISOString().slice(0,16);
             loadTasks();
+
+            // Verificar alarmes a cada segundo
+            setInterval(checkAlarms, 1000);
         });
 
         async function toggleRecording() {
@@ -177,7 +194,8 @@
                 start_at: time,
                 priority: priority,
                 status: 'pendente',
-                audio: recordedAudioBase64
+                audio: recordedAudioBase64,
+                alerted: false
             };
 
             const tasks = getTasks();
@@ -211,6 +229,52 @@
             loadTasks();
         }
 
+        // Sistema de verificação de tempo e disparo de alarme
+        function checkAlarms() {
+            const tasks = getTasks();
+            const now = new Date();
+            let updated = false;
+
+            tasks.forEach(t => {
+                if (t.status === 'pendente' && !t.alerted) {
+                    const taskTime = new Date(t.start_at);
+                    if (now >= taskTime) {
+                        t.alerted = true;
+                        updated = true;
+                        triggerAlarmModal(t);
+                    }
+                }
+            });
+
+            if (updated) {
+                saveTasks(tasks);
+                loadTasks();
+            }
+        }
+
+        function triggerAlarmModal(task) {
+            document.getElementById('alarmTaskDesc').textContent = task.description;
+            const audioContainer = document.getElementById('alarmAudioContainer');
+            
+            if (task.audio) {
+                audioContainer.innerHTML = `<audio id="modalAudio" controls autoplay class="w-full mt-2"><source src="${task.audio}" type="audio/webm"></audio>`;
+                activeAlarmAudio = document.getElementById('modalAudio');
+            } else {
+                audioContainer.innerHTML = '<p class="text-xs text-slate-400">Nenhuma nota de voz associada.</p>';
+                activeAlarmAudio = null;
+            }
+
+            document.getElementById('alarmModal').classList.remove('hidden');
+        }
+
+        function dismissAlarm() {
+            if (activeAlarmAudio) {
+                activeAlarmAudio.pause();
+                activeAlarmAudio.currentTime = 0;
+            }
+            document.getElementById('alarmModal').classList.add('hidden');
+        }
+
         function loadTasks() {
             const container = document.getElementById('tasksContainer');
             const tasks = getTasks();
@@ -220,7 +284,6 @@
                 return;
             }
 
-            // Ordenar por data
             tasks.sort((a, b) => new Date(a.start_at) - new Date(b.start_at));
 
             container.innerHTML = '';
@@ -254,4 +317,5 @@
         }
     </script>
 </body>
-</html>
+                            </html>
+                            
