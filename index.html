@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Zimous Voice Reminder v2.1</title>
     
-    <!-- Meta Tags para partilha bonita com a imagem gerada -->
+    <!-- Meta Tags Open Graph com a imagem capa.png -->
     <meta property="og:title" content="Zimous Voice Reminder 🎙️ | O Seu Assistente de Voz Inteligente">
     <meta property="og:description" content="Organize tarefas e grave notas de voz diretamente no telemóvel. Sem instalar nada, rápido e 100% privado!">
     <meta property="og:image" content="https://raw.githubusercontent.com/zimous12m-tech/zimous-voice-reminder/main/capa.png">
@@ -34,15 +34,16 @@
         </div>
     </header>
 
-    <!-- Modal de Alarme Disparado -->
-    <div id="alarmModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="bg-slate-900 border border-indigo-500/50 rounded-2xl max-w-md w-full p-6 shadow-2xl text-center space-y-4 animate-bounce">
-            <div class="text-4xl">🚨</div>
-            <h2 class="text-xl font-bold text-indigo-400">Alarme de Lembrete!</h2>
-            <p id="alarmTaskDesc" class="text-slate-200 text-sm font-medium"></p>
-            <div id="alarmAudioContainer"></div>
-            <button onclick="dismissAlarm()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2.5 rounded-xl transition cursor-pointer">
-                Compreendido / Fechar Alarme
+    <!-- Modal de Alarme Contínuo -->
+    <div id="alarmModal" class="hidden fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-slate-900 border-2 border-red-500 rounded-2xl max-w-md w-full p-6 shadow-2xl text-center space-y-4 animate-pulse">
+            <div class="text-5xl">🚨</div>
+            <h2 class="text-2xl font-bold text-red-500">ALARME DE LEMBRETE!</h2>
+            <p id="alarmTaskDesc" class="text-slate-100 text-base font-semibold bg-slate-950 p-3 rounded-xl border border-slate-800"></p>
+            <div id="alarmAudioContainer" class="hidden"></div>
+            <p class="text-xs text-slate-400">O som continuará a tocar até fechar o alarme.</p>
+            <button onclick="dismissAlarm()" class="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-xl transition shadow-lg shadow-red-600/30 text-sm cursor-pointer">
+                COMPREENDIDO / PARAR ALARME
             </button>
         </div>
     </div>
@@ -118,15 +119,15 @@
         let isRecording = false;
         let recordedAudioBase64 = "";
         let activeAlarmAudio = null;
+        let audioCtx = null;
+        let alarmInterval = null;
 
-        // Preencher data atual por defeito e iniciar o vigilante de alarmes
         document.addEventListener("DOMContentLoaded", () => {
             const now = new Date();
             now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
             document.getElementById('taskTime').value = now.toISOString().slice(0,16);
             loadTasks();
 
-            // Verificar alarmes a cada segundo
             setInterval(checkAlarms, 1000);
         });
 
@@ -202,7 +203,6 @@
             tasks.push(newTask);
             saveTasks(tasks);
 
-            // Limpar formulário
             document.getElementById('taskForm').reset();
             recordedAudioBase64 = "";
             document.getElementById('audioPreview').classList.add('hidden');
@@ -229,7 +229,6 @@
             loadTasks();
         }
 
-        // Sistema de verificação de tempo e disparo de alarme
         function checkAlarms() {
             const tasks = getTasks();
             const now = new Date();
@@ -254,23 +253,49 @@
 
         function triggerAlarmModal(task) {
             document.getElementById('alarmTaskDesc').textContent = task.description;
-            const audioContainer = document.getElementById('alarmAudioContainer');
-            
-            if (task.audio) {
-                audioContainer.innerHTML = `<audio id="modalAudio" controls autoplay class="w-full mt-2"><source src="${task.audio}" type="audio/webm"></audio>`;
-                activeAlarmAudio = document.getElementById('modalAudio');
-            } else {
-                audioContainer.innerHTML = '<p class="text-xs text-slate-400">Nenhuma nota de voz associada.</p>';
-                activeAlarmAudio = null;
+            document.getElementById('alarmModal').classList.remove('hidden');
+
+            // Bipe contínuo de alarme
+            try {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                alarmInterval = setInterval(() => {
+                    if (!audioCtx) return;
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+                    gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.2);
+                }, 400);
+            } catch (e) {
+                console.log("Erro no audio context", e);
             }
 
-            document.getElementById('alarmModal').classList.remove('hidden');
+            // Loop contínuo da voz gravada
+            if (task.audio) {
+                const container = document.getElementById('alarmAudioContainer');
+                container.innerHTML = `<audio id="loopAudio" autoplay loop><source src="${task.audio}" type="audio/webm"></audio>`;
+                activeAlarmAudio = document.getElementById('loopAudio');
+                activeAlarmAudio.play().catch(err => console.log("Autoplay evitado"));
+            }
         }
 
         function dismissAlarm() {
+            if (alarmInterval) {
+                clearInterval(alarmInterval);
+                alarmInterval = null;
+            }
+            if (audioCtx) {
+                audioCtx.close();
+                audioCtx = null;
+            }
             if (activeAlarmAudio) {
                 activeAlarmAudio.pause();
                 activeAlarmAudio.currentTime = 0;
+                activeAlarmAudio = null;
             }
             document.getElementById('alarmModal').classList.add('hidden');
         }
@@ -317,5 +342,4 @@
         }
     </script>
 </body>
-                            </html>
-                            
+</html>
